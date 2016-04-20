@@ -88,6 +88,7 @@ namespace Sag {
         long numOutputs; // total number of outputs (one for reach redshift)
         long numDataSets; // number of DataSets (= row fields, = columns) in each output
         long nvalues; // values in one dataset (assume the same number for each dataset of the same output group (redshift))
+        long blocksize;     // number of elements in one read-block, should be small enough to fit (blocksize * number of datasets) into memory
 
         long snapnumfactor;
         long rowfactor;
@@ -105,7 +106,7 @@ namespace Sag {
         long currRow;
         long countInBlock;
         int countSnap;
-       
+
         int current_snapnum;
         vector<int> user_snapnums;
         long NInFileSnapnum;
@@ -135,8 +136,10 @@ namespace Sag {
         void getMeta();
 
         int getNextRow();
-        int readNextBlock(); //possibly add startRow (numRow?), numRows? --> but these are global anyway
-        long* readLongDataSet(const string s, long &nvalues);
+        int readNextBlock(long blocksize); //possibly add startRow (numRow?), numRows? --> but these are global anyway
+        //long* readLongDataSet(const string s, long &nvalues);
+        long* readLongDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset);
+    
         double* readDoubleDataSet(const string s, long &nvalues);
         float* readFloatDataSet(const std::string s, long &nvalues);
  

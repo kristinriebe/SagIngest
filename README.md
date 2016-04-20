@@ -55,6 +55,7 @@ The important new options are:
 TODO
 -----
 * Avoid reading more than necessary by comparing the available datasets with the mapping file and already removing at this stage what will not be needed. 
+* Probably do not need my own class dataBlock at all; use dataset or hyperslab or so instead?
 * Make mapping file optional, use internal names and datatypes as default
 * Read constant values as well (for phkeys)
 * Allow calculations on the fly (ix, iy, iz)

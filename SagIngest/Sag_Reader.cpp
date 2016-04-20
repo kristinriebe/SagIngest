@@ -56,6 +56,8 @@ namespace Sag {
         currRow = 0;
         countInBlock = 0;   // counts values in each datablock (output)
 
+        blocksize = 6;
+
         // factors for constructing dbId, could/should be read from user input, actually
         snapnumfactor = 1000;
         rowfactor = 1000000;
@@ -199,41 +201,51 @@ namespace Sag {
         DataBlock b;
         string name;
         string outputName;
+        long n;
+
 
         // get one line from already read datasets (using readNextBlock)
-        // use readNextBlock to read the next block of datasets if necessary
+        // use readNextBlock to read the next blocks from datasets, if necessary
+        // readNextblock returns blocksize = number of read values; this 
+        // may be adjusted at the end of the file, new value is then returned
+        // and can beused to check here, when we reach the end of the file
         if (currRow == 0) {
             // we are at the very beginning
             // read block, initialize counter
-            nvalues = readNextBlock();
+            blocksize = readNextBlock(blocksize);
+            //cout << "nvalues in getNextRow: " << nvalues << endl;
             countInBlock = 0;
-        } else if (countInBlock == nvalues-1) {
+        } else if (countInBlock == blocksize-1) {
             // end of block reached, read the next block
-            nvalues = readNextBlock();
+            blocksize = readNextBlock(blocksize);
+            //cout << "nvalues in getNextRow: " << nvalues << endl;
             countInBlock = 0;
         } else {
+            cout << "blocksize: " << blocksize << endl;
             countInBlock++;
         }
 
-        if (nvalues <= 0) {
+        if (blocksize <= 0) {
             return 0;
         } 
 
-        currRow++; // counts all rows
+        currRow++; // global counter for all rows
 
         // stop reading/ingesting, if mass is lower than threshold?
         // stop after reading maxRows?
         // stop after a certain number of blocks?
+        
+        // Do not have a reliable number of values in the datasets, so 
+        // rely on readNextBlock to return something < 0 if it encounters 
+        // end of file.
     
         return 1;
     }
 
-    int SagReader::readNextBlock() {
+    int SagReader::readNextBlock(long blocksize) {
         cout << "read next block: with numDataSets: " << numDataSets << endl;
-        // read one block from SAG HDF5-file
-        long nblock = 100; // should be small enough so that data fit in mem.
-        // should make this a global variable
-        // just for testing now ...
+
+        // read one block from SAG HDF5-file, max. blocksize values
 
         long nvalues;
 
@@ -248,15 +260,28 @@ namespace Sag {
         FloatType ftype;
         size_t dsize; 
         
-        //herr_t status;       
-        //string newtext = "";
-        //boost::regex re(":z[0-9.]*");
+        herr_t status;
+        hsize_t count[2];              // size of the hyperslab in the file
+        hsize_t offset[2];             // hyperslab offset in the file
+        hsize_t nblock[2];              // block size to be read
         
+
         // clear datablocks from previous block, before reading new ones:
         datablocks.clear();
 
-        nvalues = getNumRowsInDataSet(dataSetNames[0]);
-        cout << "nvalues, currRow: " << nvalues << ", " << currRow << endl;
+        nvalues = getNumRowsInDataSet(dataSetNames[0]); // could do this already outside of this function!
+
+        // make sure that we are not exceeding the max. number of values:
+        blocksize = min(blocksize, nvalues-currRow);
+
+        offset[0] = currRow;
+        offset[1] = 0; // we actually only have this one dimension!
+
+        nblock[0] = blocksize;
+        nblock[1] = 1;
+
+        
+        cout << "nvalues, currRow, blocksize: " << nvalues << ", " << currRow << ", " << blocksize << endl;
         if (currRow >= nvalues) {
             // already reached end of file, no more data available
             cout << "End of dataset reached. Nothing more to read." << endl; 
@@ -288,7 +313,9 @@ namespace Sag {
                 dsize = intype.getSize();
                 if (sizeof(long) == dsize) {
                     cout << "DataSet has long type!" << endl;
-                    long *data = readLongDataSet(s, nvalues);
+                    //long *data = readLongDataSet(s, nvalues);  
+                    long *data = readLongDataSet(s, nvalues, nblock, offset);
+ 
                 } else if (sizeof(int) == dsize) {
                     cout << "DataSet has int type!" << endl;
                      //int *data2 = readIntDataSet(s, nvalues);
@@ -333,14 +360,14 @@ namespace Sag {
         // => assigning to the new class has already happened now inside the read-class.
 
         endTime = boost::posix_time::microsec_clock::universal_time();
-        printf("Time for reading (%ld rows): %lld ms\n", nvalues, (long long int) (endTime-startTime).total_milliseconds());
+        printf("Time for reading (%ld rows): %lld ms\n", blocksize, (long long int) (endTime-startTime).total_milliseconds());
         fflush(stdout);
             
-        return nvalues; //assume that nvalues is the same for each dataset (datablock) inside one Output-group (same redshift)
+        return blocksize; // number of read values
     }
 
 
-    long* SagReader::readLongDataSet(const std::string s, long &nvalues) {
+    long* SagReader::readLongDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset) {
         // read a long-type dataset
         //std::string s2("Outputs/Output79/nodeData/blackHoleCount");
         // DataSet dataset = fp->openDataSet(s);
@@ -349,7 +376,7 @@ namespace Sag {
         //cout << "Reading DataSet '" << s << "'" << endl;
 
         DataSet *dptr = new DataSet(fp->openDataSet(s)); // need pointer because of "new ..."
-        DataSet dataset = *dptr; // for convenience
+        DataSet dataset = *dptr; // for convenience (TODO: CHECK: only works, if class contains a copy-constructor)
 
         // check class type
         H5T_class_t type_class = dataset.getTypeClass();
@@ -415,12 +442,61 @@ namespace Sag {
         //cout << size << endl;
         //int nvalues = size/sizeof(long);
 
+        // define hyperslab
+        //status = H5Sselect_hyperslab (memspace, H5S_SELECT_SET, offset_out, NULL, 
+        //                              count_out, NULL);
+
+        // try to understand all this stuff about using hyperslabs:
+        // https://www.hdfgroup.org/HDF5/Tutor/selectsimple.html
+        // and example code at: https://www.hdfgroup.org/ftp/HDF5/current/src/unpacked/c++/examples/h5tutr_subset.cpp
+
+        hsize_t off[2];   // hyperslab offset in the file
+        hsize_t count[2];    // size of the hyperslab in the file
+        hsize_t stride[2], block[2];
+
+
+        //offset[0] = currRow;  // offset by what was read already, provided from caller of this function
+        //offset[1] = 0;
+        count[0]  = 1;  // just use 1 block, so count = 1
+        count[1]  = 1;
+
+        stride[0] = 1;
+        stride[1] = 1;
+        
+        block[0] = nblock[0]; // Could use block instead of count, might be faster
+        block[1] = 1;
+
+        hsize_t dimsm[2];              /* memory space dimensions */
+        dimsm[0] = nblock[0];
+        dimsm[1] = 1;
+
+        DataSpace memspace(rank, dimsm, NULL); // was provided as example
+
+        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset, stride, block); 
+        //dataspace.selectHyperslab( H5S_SELECT_SET, count, offset ); 
+        
         // read data
-        long *buffer = new long[nvalues]; // = same as malloc
-        dataset.read(buffer,PredType::NATIVE_LONG);
+        long *buffer = new long[nblock[0]]; // = same as malloc
+        long rdata[nblock[0]][1];
+        for (int i=0;i<nblock[0];i++) {
+            rdata[i][0] = 0;
+        }
+
+        dataset.read(rdata,PredType::NATIVE_LONG, memspace, dataspace);
+
+        cout << "data is read to buffer." << endl;
+
+        for (int i=0;i<nblock[0];i++) {
+            cout << "rdata: " << rdata[i][0] << endl;
+            buffer[i] = rdata[i][0]; // should use memcpy or similar for faster copying!
+        }
+
+        //exit(0);
 
         // the data is stored in buffer now, so we can delete the dataset;
         // to do this, call delete on the pointer to the dataset
+        dataspace.close();
+        memspace.close();
         dataset.close();
         // delete dataset is not necessary, if it is a variable on the heap.
         // Then it is removed automatically when the function ends.
