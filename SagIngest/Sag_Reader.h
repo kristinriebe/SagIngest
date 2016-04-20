@@ -136,12 +136,11 @@ namespace Sag {
         void getMeta();
 
         int getNextRow();
-        int readNextBlock(long blocksize); //possibly add startRow (numRow?), numRows? --> but these are global anyway
-        //long* readLongDataSet(const string s, long &nvalues);
+        int readNextBlock(long blocksize);
         long* readLongDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset);
     
-        double* readDoubleDataSet(const string s, long &nvalues);
-        float* readFloatDataSet(const std::string s, long &nvalues);
+        double* readDoubleDataSet(const string s, long &nvalues, hsize_t *nblock, hsize_t *offset);
+        float* readFloatDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset);
  
         long getNumRowsInDataSet(string s);
 

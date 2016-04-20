@@ -203,7 +203,6 @@ namespace Sag {
         string outputName;
         long n;
 
-
         // get one line from already read datasets (using readNextBlock)
         // use readNextBlock to read the next blocks from datasets, if necessary
         // readNextblock returns blocksize = number of read values; this 
@@ -221,7 +220,7 @@ namespace Sag {
             //cout << "nvalues in getNextRow: " << nvalues << endl;
             countInBlock = 0;
         } else {
-            cout << "blocksize: " << blocksize << endl;
+            //cout << "blocksize: " << blocksize << endl;
             countInBlock++;
         }
 
@@ -246,8 +245,7 @@ namespace Sag {
         cout << "read next block: with numDataSets: " << numDataSets << endl;
 
         // read one block from SAG HDF5-file, max. blocksize values
-
-        long nvalues;
+        // nvalues is a global variable
 
         //performance output stuff
         boost::posix_time::ptime startTime;
@@ -261,21 +259,21 @@ namespace Sag {
         size_t dsize; 
         
         herr_t status;
-        hsize_t count[2];              // size of the hyperslab in the file
-        hsize_t offset[2];             // hyperslab offset in the file
-        hsize_t nblock[2];              // block size to be read
-        
+        hsize_t count[2];       // size of the hyperslab in the file (number of blocks)
+        hsize_t offset[2];      // hyperslab offset in the file
+        hsize_t nblock[2];      // block size to be read
 
         // clear datablocks from previous block, before reading new ones:
         datablocks.clear();
 
         nvalues = getNumRowsInDataSet(dataSetNames[0]); // could do this already outside of this function!
 
-        // make sure that we are not exceeding the max. number of values:
+        // make sure that we are not exceeding the max. number 
+        // of values in this dataset:
         blocksize = min(blocksize, nvalues-currRow);
 
         offset[0] = currRow;
-        offset[1] = 0; // we actually only have this one dimension!
+        offset[1] = 0; // we actually only have one dimension > 1 for SAG data
 
         nblock[0] = blocksize;
         nblock[1] = 1;
@@ -304,8 +302,7 @@ namespace Sag {
 
             // check class type
             H5T_class_t type_class = dataset.getTypeClass();
-
-            cout << "type_class " << type_class << endl;
+            //cout << "type_class " << type_class << endl;
 
             if (type_class == H5T_INTEGER) {
                 // check exactly, if int or long int
@@ -331,10 +328,10 @@ namespace Sag {
                 dsize = ftype.getSize();
                 if (sizeof(double) == dsize) {
                     cout << "DataSet has double type!" << endl;
-                    double *data3 = readDoubleDataSet(s, nvalues);
+                    double *data3 = readDoubleDataSet(s, nvalues, nblock, offset);
                 } else if (sizeof(float) == dsize) {
                     cout << "DataSet has float type!" << endl;
-                    float *data4 = readFloatDataSet(s, nvalues);
+                    float *data4 = readFloatDataSet(s, nvalues, nblock, offset);
                 } else {
                     cout << "ERROR: Do not know how to deal with float-type of size " << dsize << endl;
                     abort();
@@ -369,12 +366,14 @@ namespace Sag {
 
     long* SagReader::readLongDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset) {
         // read a long-type dataset
-        //std::string s2("Outputs/Output79/nodeData/blackHoleCount");
-        // DataSet dataset = fp->openDataSet(s);
-        // rather need pointer to dataset in order to delete it later on:
 
         //cout << "Reading DataSet '" << s << "'" << endl;
+        hsize_t count[2];    // size of the hyperslab in the file
+        hsize_t stride[2];  // should be 1,1
+        hsize_t block[2];   // block size, should use nblock-values
 
+        // DataSet dataset = fp->openDataSet(s);
+        // rather need pointer to dataset in order to delete it later on:
         DataSet *dptr = new DataSet(fp->openDataSet(s)); // need pointer because of "new ..."
         DataSet dataset = *dptr; // for convenience (TODO: CHECK: only works, if class contains a copy-constructor)
 
@@ -397,24 +396,22 @@ namespace Sag {
         }
 
         size_t dsize = intype.getSize();
-        cout << "Data size is " << dsize << endl;
+        //cout << "Data size is " << dsize << endl;
 
-        // get dataspace of the dataset (the array length or so)
+        // get dataspace of the dataset
         DataSpace dataspace = dataset.getSpace();
-        ////hid_t dataspace = H5Dget_space(dataset); --> this does not work!! At least not with dataset defined as above!
         //cout << "Dataspace is " << dataspace << endl;
-        // get number of dimensions in dataspace
-        
 
+        // get number of dimensions in dataspace
         int rank = dataspace.getSimpleExtentNdims();
-        cout << "Dataspace rank is " << rank << endl;
+        //cout << "Dataspace rank is " << rank << endl;
 
         // I expect this to be 2 for all SAG datasets!
         // There are no more-dimensional arrays stored in one dataset, are there?
         if (rank == 1) {
             hsize_t dims_out[1];
             int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
-            cout << "dimension " << (unsigned long)(dims_out[0]) << endl;
+            //cout << "dimension " << (unsigned long)(dims_out[0]) << endl;
             nvalues = dims_out[0];
            
         }
@@ -422,9 +419,9 @@ namespace Sag {
             hsize_t dims_out[2];
             int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
             if (dims_out[rank-1] == 1) {
-                cout << "rank " << rank << ", dimensions " <<
-                    (unsigned long)(dims_out[0]) << " x " <<
-                    (unsigned long)(dims_out[1]) << endl;
+                //cout << "rank " << rank << ", dimensions " <<
+                //    (unsigned long)(dims_out[0]) << " x " <<
+                //    (unsigned long)(dims_out[1]) << endl;
                 nvalues = dims_out[0];
             } else {
                 cout << "ERROR: Cannot cope with this dataset, dimensions too high:" << 
@@ -437,63 +434,40 @@ namespace Sag {
             abort();
         }
 
-        // alternative way of determining data size (needed for buffer memory allocation!)
-        //size_t size = dataset.getInMemDataSize();
-        //cout << size << endl;
-        //int nvalues = size/sizeof(long);
-
         // define hyperslab
-        //status = H5Sselect_hyperslab (memspace, H5S_SELECT_SET, offset_out, NULL, 
-        //                              count_out, NULL);
-
-        // try to understand all this stuff about using hyperslabs:
-        // https://www.hdfgroup.org/HDF5/Tutor/selectsimple.html
-        // and example code at: https://www.hdfgroup.org/ftp/HDF5/current/src/unpacked/c++/examples/h5tutr_subset.cpp
-
-        hsize_t off[2];   // hyperslab offset in the file
-        hsize_t count[2];    // size of the hyperslab in the file
-        hsize_t stride[2], block[2];
-
-
-        //offset[0] = currRow;  // offset by what was read already, provided from caller of this function
-        //offset[1] = 0;
+        // offset already provided when calling this function, no need to redefine here
         count[0]  = 1;  // just use 1 block, so count = 1
         count[1]  = 1;
 
         stride[0] = 1;
         stride[1] = 1;
         
-        block[0] = nblock[0]; // Could use block instead of count, might be faster
+        block[0] = nblock[0]; // use block instead of count, might be faster
         block[1] = 1;
 
-        hsize_t dimsm[2];              /* memory space dimensions */
+        hsize_t dimsm[2]; // memory space dimensions, must be the same as hyperslab-size
         dimsm[0] = nblock[0];
         dimsm[1] = 1;
 
-        DataSpace memspace(rank, dimsm, NULL); // was provided as example
+        // define memory space
+        DataSpace memspace(rank, dimsm, NULL);
 
+        // selec the hyperslap from the dataspace
         dataspace.selectHyperslab(H5S_SELECT_SET, count, offset, stride, block); 
         //dataspace.selectHyperslab( H5S_SELECT_SET, count, offset ); 
         
-        // read data
-        long *buffer = new long[nblock[0]]; // = same as malloc
-        long rdata[nblock[0]][1];
-        for (int i=0;i<nblock[0];i++) {
-            rdata[i][0] = 0;
-        }
-
+        // read data from selection
+        long rdata[nblock[0]][1]; // read requirer buffer to have same dimensions as dataset
         dataset.read(rdata,PredType::NATIVE_LONG, memspace, dataspace);
-
-        cout << "data is read to buffer." << endl;
+        
+        // copy over to an array with 1 dim. only, for convenience
+        long *buffer = new long[nblock[0]]; // = same as malloc
 
         for (int i=0;i<nblock[0];i++) {
-            cout << "rdata: " << rdata[i][0] << endl;
             buffer[i] = rdata[i][0]; // should use memcpy or similar for faster copying!
         }
 
-        //exit(0);
-
-        // the data is stored in buffer now, so we can delete the dataset;
+        // the data is stored in buffer now, so we can delete the dataset etc.;
         // to do this, call delete on the pointer to the dataset
         dataspace.close();
         memspace.close();
@@ -502,38 +476,24 @@ namespace Sag {
         // Then it is removed automatically when the function ends.
         delete dptr;
 
-        //std::vector<int> data_out(NX);
-        //H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &data_out[0]);
-        // --> this did not work, do not know why.
-        //cout << "status: " << status << endl;
-        //int data_out2[dims_out[0]];
-        //dataset.read(data_out, PredType::NATIVE_LONG, memspace, filespace);
-        // --> this caused problems with incompatible memspace and filespace etc.
-
-        /*cout << "First values: ";
-        for (int j = 0; j < 10; j++) {
-            cout << buffer[j] << " ";
-        }
-        cout << endl;
-        */
-
         DataBlock b;
         b.nvalues = nvalues;
         b.longval = buffer;
         b.name = s;
         datablocks.push_back(b);
-        // b is added to datablocks-vector now
-
+        // block b with the data is added to datablocks-vector now
 
         return buffer;
     }
 
 
-    double* SagReader::readDoubleDataSet(const std::string s, long &nvalues) {
+    double* SagReader::readDoubleDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset) {
         // read a double-type dataset
-        //std::string s2("Outputs/Output79/nodeData/blackHoleCount");
-        // DataSet dataset = fp->openDataSet(s);
-        // rather need pointer to dataset in order to delete it later on:
+        // TODO: not tested yet, since SAG-data only contain floats (4 byte)
+
+        hsize_t count[2];   // size of the hyperslab in the file
+        hsize_t stride[2];  // should be 1,1
+        hsize_t block[2];   // block size, should use nblock-values
 
         //cout << "Reading DataSet '" << s << "'" << endl;
 
@@ -568,46 +528,90 @@ namespace Sag {
         // get number of dimensions in dataspace
         int rank = dataspace.getSimpleExtentNdims();
         //cout << "Dataspace rank is " << rank << endl;
-        // I expect this to be 1 for all SAG datasets!
-        // There are no 2 (or more) dimensional arrays stored in one dataset, are there?
-        if (rank > 1) {
-            cout << "ERROR: Cannot cope with multi-dimensional datasets!" << endl;
+
+        // I expect this to be 2 for all SAG datasets!
+        // There are no more-dimensional arrays stored in one dataset, are there?
+        if (rank == 1) {
+            hsize_t dims_out[1];
+            int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
+            nvalues = dims_out[0];
+        }
+        else if (rank == 2) {
+            hsize_t dims_out[2];
+            int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
+            if (dims_out[rank-1] == 1) {
+                nvalues = dims_out[0];
+            } else {
+                cout << "ERROR: Cannot cope with this dataset, dimensions too high:" << 
+                    (unsigned long)(dims_out[0]) << " x " <<
+                    (unsigned long)(dims_out[1]) << endl;
+                abort();
+            }
+        } else {
+            cout << "ERROR: Cannot cope with multi-dimensional datasets! rank: " << rank << endl;
             abort();
         }
 
-        hsize_t dims_out[1];
-        int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
-        //cout << "dimension " << (unsigned long)(dims_out[0]) << endl;
-        nvalues = dims_out[0];
+        // define hyperslab
+        // offset already provided when calling this function, no need to redefine here
+        count[0]  = 1;  // just use 1 block, so count = 1
+        count[1]  = 1;
 
-        // read data
-        double *buffer = new double[nvalues];
-        dataset.read(buffer,PredType::NATIVE_DOUBLE);
+        stride[0] = 1;
+        stride[1] = 1;
+        
+        block[0] = nblock[0]; // use block instead of count, might be faster
+        block[1] = 1;
 
-        // the data is stored in buffer now, so we can delete the dataset;
-        // to do this, call delete on the pointer to the dataset
-        dataset.close();
-        delete dptr;
+        hsize_t dimsm[2]; // memory space dimensions, must be the same as hyperslab-size
+        dimsm[0] = nblock[0];
+        dimsm[1] = 1;
 
-        /*cout << "First values: ";
-        for (int j = 0; j < 10; j++) {
-            cout << buffer[j] << " ";
+        // define memory space
+        DataSpace memspace(rank, dimsm, NULL);
+
+        // selec the hyperslap from the dataspace
+        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset, stride, block); 
+        //dataspace.selectHyperslab( H5S_SELECT_SET, count, offset ); 
+        
+        // read data from selection
+        double rdata[nblock[0]][1]; // read requires buffer to have the same dimensions as dataset
+        dataset.read(rdata,PredType::NATIVE_DOUBLE, memspace, dataspace);
+
+        // copy over to an array with 1 dim. only, for convenience
+        double *buffer = new double[nblock[0]]; // = same as malloc
+
+        for (int i=0;i<nblock[0];i++) {
+            buffer[i] = rdata[i][0]; // should use memcpy or similar for faster copying!
         }
-        cout << endl;
-        */
+
+        // the data is stored in buffer now, so we can delete the dataset etc.;
+        // to do this, call delete on the pointer to the dataset
+        dataspace.close();
+        memspace.close();
+        dataset.close();
+        // delete dataset is not necessary, if it is a variable on the heap.
+        // Then it is removed automatically when the function ends.
+        delete dptr;
 
         DataBlock b;
         b.nvalues = nvalues;
         b.doubleval = buffer;
         b.name = s;
         datablocks.push_back(b);
-
+        // block b with the data is added to datablocks-vector now
 
         return buffer;
     }
 
-    float* SagReader::readFloatDataSet(const std::string s, long &nvalues) {
+
+    float* SagReader::readFloatDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset) {
         // read a float-type dataset (4 bytes, not double)
+
+        hsize_t count[2];   // size of the hyperslab in the file
+        hsize_t stride[2];  // should be 1,1
+        hsize_t block[2];   // block size, should use nblock-values
+
         //cout << "Reading DataSet '" << s << "'" << endl;
 
         DataSet *dptr = new DataSet(fp->openDataSet(s));
@@ -624,11 +628,11 @@ namespace Sag {
         FloatType ftype = dataset.getFloatType();
         H5std_string order_string;
         H5T_order_t order = ftype.getOrder(order_string);
-        //cout << order_string << endl;
+        cout << order_string << endl;
 
         // check again data sizes
         size_t dsize = ftype.getSize();
-       //cout << "Data size is " << dsize << endl;
+        //cout << "Data size is " << dsize << endl;
         if (sizeof(float) != dsize) {
             cout << "Mismatch of float data type." << endl;
             abort();
@@ -636,44 +640,83 @@ namespace Sag {
 
         // get dataspace of the dataset (the array length or so)
         DataSpace dataspace = dataset.getSpace();
-        //hid_t dataspace = H5Dget_space(dataset); --> this does not work!! At least not with dataset defined as above!
-
+ 
         // get number of dimensions in dataspace
         int rank;
         rank = dataspace.getSimpleExtentNdims();
-        //cout << "Dataspace rank is " << rank << endl;
-        if (rank < 1 || rank > 2) {
-            cout << "ERROR: Not sure how to cope with multi-dimensional datasets! rank: " << rank << endl;
+
+        // I expect this to be 2 for all SAG datasets!
+        // There are no more-dimensional arrays stored in one dataset, are there?
+        if (rank == 1) {
+            hsize_t dims_out[1];
+            int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
+            //cout << "dimension " << (unsigned long)(dims_out[0]) << endl;
+            nvalues = dims_out[0];
+        }
+        else if (rank == 2) {
+            hsize_t dims_out[2];
+            int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
+            if (dims_out[rank-1] == 1) {
+                nvalues = dims_out[0];
+            } else {
+                cout << "ERROR: Cannot cope with this dataset, dimensions too high:" << 
+                    (unsigned long)(dims_out[0]) << " x " <<
+                    (unsigned long)(dims_out[1]) << endl;
+                abort();
+            }
+        } else {
+            cout << "ERROR: Cannot cope with multi-dimensional datasets! rank: " << rank << endl;
             abort();
         }
-        // I expect this to be 2 for all SAG datasets,
-        // expect dims_out[0] to reflect nvalues, actually. Hope this is right.
-        hsize_t dims_out[rank];
-        int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
-        nvalues = dims_out[0];
 
-        // read data
-        float *buffer = new float[nvalues];
-        dataset.read(buffer,PredType::NATIVE_FLOAT);
+        // define hyperslab
+        // offset already provided when calling this function, no need to redefine here
+        count[0]  = 1;  // just use 1 block, so count = 1
+        count[1]  = 1;
 
-        // the data is stored in buffer now, so we can delete the dataset;
-        // to do this, call delete on the pointer to the dataset
-        dataset.close();
-        delete dptr;
+        stride[0] = 1;
+        stride[1] = 1;
+        
+        block[0] = nblock[0]; // use block instead of count, might be faster
+        block[1] = 1;
 
-        /*cout << "First values: ";
-        for (int j = 0; j < 10; j++) {
-            cout << buffer[j] << " ";
+        hsize_t dimsm[2]; // memory space dimensions, must be the same as hyperslab-size
+        dimsm[0] = nblock[0];
+        dimsm[1] = 1;
+
+        // define memory space
+        DataSpace memspace(rank, dimsm, NULL);
+
+        // selec the hyperslap from the dataspace
+        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset, stride, block); 
+        
+        // read data from selection
+        float rdata[nblock[0]][1]; // read requires buffer to have the same dimensions as dataset
+        dataset.read(rdata,PredType::NATIVE_FLOAT, memspace, dataspace);
+        
+        // copy over to an array with 1 dim. only, for convenience
+        float *buffer = new float[nblock[0]]; // = same as malloc
+
+        for (int i=0;i<nblock[0];i++) {
+            //cout << "rdata: " << rdata[i][0] << endl;
+            buffer[i] = rdata[i][0]; // should use memcpy or similar for faster copying!
         }
-        cout << endl;
-        */
+
+        // the data is stored in buffer now, so we can delete the dataset etc.;
+        // to do this, call delete on the pointer to the dataset
+        dataspace.close();
+        memspace.close();
+        dataset.close();
+        // delete dataset is not necessary, if it is a variable on the heap.
+        // Then it is removed automatically when the function ends.
+        delete dptr;
 
         DataBlock b;
         b.nvalues = nvalues;
         b.floatval = buffer;
         b.name = s;
         datablocks.push_back(b);
-
+        // block b with the data is added to datablocks-vector now
 
         return buffer;
     }
