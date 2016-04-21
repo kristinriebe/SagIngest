@@ -43,7 +43,7 @@ namespace Sag {
         currRow = 0;
     }
     
-    SagReader::SagReader(string newFileName, int newFileNum) {
+    SagReader::SagReader(string newFileName, int newFileNum, vector<string>datafileFieldNames) {
 
         fileName = newFileName;
         
@@ -56,7 +56,7 @@ namespace Sag {
         currRow = 0;
         countInBlock = 0;   // counts values in each datablock (output)
 
-        blocksize = 6;
+        blocksize = 100;
 
         // factors for constructing dbId, could/should be read from user input, actually
         snapnumfactor = 1000;
@@ -65,15 +65,8 @@ namespace Sag {
         openFile(newFileName);
         //offsetFileStream();
 
-        getMeta();
+        getMeta(datafileFieldNames);
         cout << "size of dataSetMap: " << dataSetMap.size() << endl;
-        //cout << dataSetMap.find("GalaxyID") << endl;
-        // print them all:
-        //vector<string> dataSetNames;
-        //for(map<string,int>::iterator it = dataSetMap.begin(); it != dataSetMap.end(); ++it) {
-        //    cout << it->first << "\n";
-        //}
-        
     }
 
 
@@ -98,7 +91,6 @@ namespace Sag {
         if (!fp) { 
             SagIngest_error("SagReader: Error in opening file.\n");
         }
-        
     }
     
     void SagReader::closeFile() {
@@ -109,7 +101,7 @@ namespace Sag {
         fp = NULL;
     }
 
-    void SagReader::getMeta() {
+    void SagReader::getMeta(vector<string> datafileFieldNames) {
         char line[1000];
         int snapnum;
         float redshift;
@@ -119,24 +111,53 @@ namespace Sag {
         string matchname;
 
         string outputName;
-        hid_t    grp;
+        hid_t    grp;        
+
+        vector<string> dataSetNames_all;
 
         cout << "Finding dataset names in the file ... " << endl;
         Group group(fp->openGroup("/"));
         grp = H5Gopen(group.getId(),"/", H5P_DEFAULT);
 
+        dataSetNames_all.clear();
+        scan_group(grp, &dataSetNames_all);
+
+        numDataSets = dataSetNames_all.size();
+        cout << "Total number of dataSets: " << numDataSets << endl;
+
+        // filter out what we actually need/don't need using schemamapper
+
+        //filter_dataSetNames(dataSetNames, );
+        
         dataSetNames.clear();
-        scan_group(grp, &dataSetNames);
-        
+        for (int k=0; k<numDataSets; k++) {
+            dsname = dataSetNames_all[k];
+            
+            for (int j=0; j<datafileFieldNames.size(); j++) {
+                if (dsname == datafileFieldNames[j]) {
+                    // found it! 
+                    dataSetNames.push_back(dsname);
+                    break;
+                }
+            }
+
+        }
         numDataSets = dataSetNames.size();
-        cout << "numDataSets: " << numDataSets << endl;
-        
+        cout << "Desired number of dataSets: " << numDataSets << endl;
+
+        if (numDataSets == 0) {
+            cout << "ERROR: Invalid hdf5-format: no datasets found in file." << endl;
+            exit(1);
+        }
+
         // create a key-value map for the dataset names, do it once for each file
         // TODO: should actually check here already, if the dataSet-names match
         //      the expectations from the mapping file;
         //      Exit, if datasets are missing.
         // TODO: read only those datasets that have a match in mapping file, 
         //      ignore the others!! => Save time and memory!!
+        //      (and also save code, since I do not need to write a reader for 
+        //      each type of a dataset!)
 
         herr_t status;
         dataSetMap.clear();
@@ -150,7 +171,6 @@ namespace Sag {
         Attribute att = group.openAttribute("Redshift");
         DataType type = att.getDataType();
         att.read(type, &redshift);
-
         cout << "redshift: " << redshift << endl;
 
         Attribute att2 = group.openAttribute("Snapshot");
@@ -166,6 +186,10 @@ namespace Sag {
         group.close();
 
         return;
+    }
+
+    void filter_dataSetNames() {
+
     }
 
     long SagReader::getNumRowsInDataSet(string s) {
@@ -226,7 +250,7 @@ namespace Sag {
 
         if (blocksize <= 0) {
             return 0;
-        } 
+        }
 
         currRow++; // global counter for all rows
 
@@ -237,7 +261,7 @@ namespace Sag {
         // Do not have a reliable number of values in the datasets, so 
         // rely on readNextBlock to return something < 0 if it encounters 
         // end of file.
-    
+
         return 1;
     }
 
@@ -290,7 +314,6 @@ namespace Sag {
 
         // read each desired data set, use corresponding read routine for different types
         for (int k=0; k<numDataSets; k++) {
-        //for (int k=0; k<2; k++) {
 
             dsname = dataSetNames[k];
             //s = string(outputName) + string("/") + dsname;
@@ -312,12 +335,14 @@ namespace Sag {
                     cout << "DataSet has long type!" << endl;
                     //long *data = readLongDataSet(s, nvalues);  
                     long *data = readLongDataSet(s, nvalues, nblock, offset);
- 
                 } else if (sizeof(int) == dsize) {
                     cout << "DataSet has int type!" << endl;
                      //int *data2 = readIntDataSet(s, nvalues);
                     cout << "ERROR: Reading datasets of int type not implemented yet!" << endl;
                     abort();
+                } else if (sizeof(int8_t) == dsize) {
+                    cout << "DataSet has tinyint type! (8 bits)" << endl;
+                    int8_t *data3 = readTinyIntDataSet(s, nvalues, nblock, offset);
                 } else {
                     cout << "ERROR: Do not know how to deal with int-type of size " << dsize << endl;
                     abort();
@@ -328,10 +353,10 @@ namespace Sag {
                 dsize = ftype.getSize();
                 if (sizeof(double) == dsize) {
                     cout << "DataSet has double type!" << endl;
-                    double *data3 = readDoubleDataSet(s, nvalues, nblock, offset);
+                    double *data4 = readDoubleDataSet(s, nvalues, nblock, offset);
                 } else if (sizeof(float) == dsize) {
                     cout << "DataSet has float type!" << endl;
-                    float *data4 = readFloatDataSet(s, nvalues, nblock, offset);
+                    float *data5 = readFloatDataSet(s, nvalues, nblock, offset);
                 } else {
                     cout << "ERROR: Do not know how to deal with float-type of size " << dsize << endl;
                     abort();
@@ -342,7 +367,6 @@ namespace Sag {
             }
             //cout << nvalues << " values read." << endl;
         }
-
 
         // How to proceed from here onwards??
         // Could read all data into data[0] to data[104] or so,
@@ -413,9 +437,7 @@ namespace Sag {
             int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
             //cout << "dimension " << (unsigned long)(dims_out[0]) << endl;
             nvalues = dims_out[0];
-           
-        }
-        else if (rank == 2) {
+        } else if (rank == 2) {
             hsize_t dims_out[2];
             int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
             if (dims_out[rank-1] == 1) {
@@ -464,7 +486,7 @@ namespace Sag {
         long *buffer = new long[nblock[0]]; // = same as malloc
 
         for (int i=0;i<nblock[0];i++) {
-            buffer[i] = rdata[i][0]; // should use memcpy or similar for faster copying!
+            buffer[i] = rdata[i][0]; // TODO: should use memcpy or similar for faster copying!
         }
 
         // the data is stored in buffer now, so we can delete the dataset etc.;
@@ -486,7 +508,125 @@ namespace Sag {
         return buffer;
     }
 
+    int8_t * SagReader::readTinyIntDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset) {
+        // read a tinyInt-dataset; use int8_t for C++ equivalent
+ 
+        hsize_t count[2];   // size of the hyperslab in the file
+        hsize_t stride[2];  // should be 1,1
+        hsize_t block[2];   // block size, should use nblock-values
 
+        // DataSet dataset = fp->openDataSet(s);
+        // rather need pointer to dataset in order to delete it later on:
+        DataSet *dptr = new DataSet(fp->openDataSet(s)); // need pointer because of "new ..."
+        DataSet dataset = *dptr; // for convenience (TODO: CHECK: only works, if class contains a copy-constructor)
+
+        // check class type
+        H5T_class_t type_class = dataset.getTypeClass();
+        if (type_class != H5T_INTEGER) {
+            cout << "Data does not have int type!" << endl;
+            abort();
+        }
+        // check byte order
+        IntType intype = dataset.getIntType();
+        H5std_string order_string;
+        H5T_order_t order = intype.getOrder(order_string);
+        //cout << order_string << endl;
+
+        size_t dsize = intype.getSize();
+        // check again data sizes
+        if (sizeof(char) != dsize) {
+            cout << "Mismatch of data type." << endl;
+            abort();
+        }
+        //cout << "Data size is " << dsize << endl;
+
+        // get dataspace of the dataset
+        DataSpace dataspace = dataset.getSpace();
+        //cout << "Dataspace is " << dataspace << endl;
+
+        // get number of dimensions in dataspace
+        int rank = dataspace.getSimpleExtentNdims();
+        //cout << "Dataspace rank is " << rank << endl;
+
+        // I expect this to be 2 for all SAG datasets!
+        // There are no more-dimensional arrays stored in one dataset, are there?
+        if (rank == 1) {
+            hsize_t dims_out[1];
+            int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
+            //cout << "dimension " << (unsigned long)(dims_out[0]) << endl;
+            nvalues = dims_out[0];
+        } else if (rank == 2) {
+            hsize_t dims_out[2];
+            int ndims = dataspace.getSimpleExtentDims(dims_out, NULL);
+            if (dims_out[rank-1] == 1) {
+                //cout << "rank " << rank << ", dimensions " <<
+                //    (unsigned long)(dims_out[0]) << " x " <<
+                //    (unsigned long)(dims_out[1]) << endl;
+                nvalues = dims_out[0];
+            } else {
+                cout << "ERROR: Cannot cope with this dataset, dimensions too high:" << 
+                    (unsigned long)(dims_out[0]) << " x " <<
+                    (unsigned long)(dims_out[1]) << endl;
+                abort();
+            }
+        } else {
+            cout << "ERROR: Cannot cope with multi-dimensional datasets! rank: " << rank << endl;
+            abort();
+        }
+
+        // define hyperslab
+        // offset already provided when calling this function, no need to redefine here
+        count[0]  = 1;  // just use 1 block, so count = 1
+        count[1]  = 1;
+
+        stride[0] = 1;
+        stride[1] = 1;
+        
+        block[0] = nblock[0]; // use block instead of count, might be faster
+        block[1] = 1;
+
+        hsize_t dimsm[2]; // memory space dimensions, must be the same as hyperslab-size
+        dimsm[0] = nblock[0];
+        dimsm[1] = 1;
+
+        // define memory space
+        DataSpace memspace(rank, dimsm, NULL);
+
+        // selec the hyperslap from the dataspace
+        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset, stride, block); 
+        //dataspace.selectHyperslab( H5S_SELECT_SET, count, offset ); 
+        
+        // read data from selection
+        int8_t rdata[nblock[0]][1]; // read requirer buffer to have same dimensions as dataset
+        dataset.read(rdata,PredType::NATIVE_INT8, memspace, dataspace);
+        
+        // copy over to an array with 1 dim. only, for convenience
+        int8_t *buffer = new int8_t[nblock[0]]; // = same as malloc
+
+        for (int i=0;i<nblock[0];i++) {
+            buffer[i] = rdata[i][0]; // TODO: should use memcpy or similar for faster copying!
+        }
+
+        // the data is stored in buffer now, so we can delete the dataset etc.;
+        // to do this, call delete on the pointer to the dataset
+        dataspace.close();
+        memspace.close();
+        dataset.close();
+        // delete dataset is not necessary, if it is a variable on the heap.
+        // Then it is removed automatically when the function ends.
+        delete dptr;
+
+        DataBlock b;
+        b.nvalues = nvalues;
+        b.tinyintval = buffer;
+        b.name = s;
+        datablocks.push_back(b);
+        // block b with the data is added to datablocks-vector now
+
+        return buffer;
+
+    }
+ 
     double* SagReader::readDoubleDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset) {
         // read a double-type dataset
         // TODO: not tested yet, since SAG-data only contain floats (4 byte)
@@ -582,7 +722,7 @@ namespace Sag {
         double *buffer = new double[nblock[0]]; // = same as malloc
 
         for (int i=0;i<nblock[0];i++) {
-            buffer[i] = rdata[i][0]; // should use memcpy or similar for faster copying!
+            buffer[i] = rdata[i][0]; // TODO: should use memcpy or similar for faster copying!
         }
 
         // the data is stored in buffer now, so we can delete the dataset etc.;
@@ -687,7 +827,7 @@ namespace Sag {
         // define memory space
         DataSpace memspace(rank, dimsm, NULL);
 
-        // selec the hyperslap from the dataspace
+        // select the hyperslap from the dataspace
         dataspace.selectHyperslab(H5S_SELECT_SET, count, offset, stride, block); 
         
         // read data from selection
@@ -699,7 +839,7 @@ namespace Sag {
 
         for (int i=0;i<nblock[0];i++) {
             //cout << "rdata: " << rdata[i][0] << endl;
-            buffer[i] = rdata[i][0]; // should use memcpy or similar for faster copying!
+            buffer[i] = rdata[i][0]; // TODO: should use memcpy or similar for faster copying!
         }
 
         // the data is stored in buffer now, so we can delete the dataset etc.;
@@ -748,11 +888,9 @@ namespace Sag {
         // variables are declared already in Sag_Reader.h
         // and the values were read in getNextRow()
         bool isNull;
-        //cout << " again2 ioutput: " << ioutput << endl;
-        //NInFile = currRow-1;	// start counting rows with 0       
         
         // go through all data items and assign the correct column numbers for the DB columns, 
-        // maybe depending on a read schema-file:
+        // maybe depending on a previously read schema-file:
         
         //cout << "dataobjname: " << thisItem->getDataObjName() << endl;
 
@@ -771,6 +909,9 @@ namespace Sag {
 
             if (b.longval) {
                 *(long*)(result) = b.longval[countInBlock];
+                return isNull;
+            } else if (b.tinyintval) {
+                *(int8_t*)(result) = b.tinyintval[countInBlock];
                 return isNull;
             } else if (b.doubleval) {
                 *(double*)(result) = b.doubleval[countInBlock];
@@ -903,8 +1044,9 @@ namespace Sag {
         name = "";
         idx = -1;
         doubleval = NULL;
-        longval = NULL;
         floatval = NULL;
+        longval = NULL;
+        tinyintval = NULL;
         type = "unknown";
     };
 
@@ -924,7 +1066,11 @@ namespace Sag {
             delete longval;
             nvalues = 0;
         }
-        if (doubleval) {
+        if (tinyintval) {
+            delete tinyintval;
+            nvalues = 0;
+        }
+       if (doubleval) {
             delete doubleval;
             nvalues = 0;
         }

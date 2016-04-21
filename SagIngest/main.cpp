@@ -168,26 +168,19 @@ int main (int argc, const char * argv[])
     DBAsserter::AsserterFactory * assertFac = new DBAsserter::AsserterFactory;
     DBConverter::ConverterFactory * convFac = new DBConverter::ConverterFactory;
 
-    //now setup the file reader
-    SagReader *thisReader = new SagReader(dataFile, fileNum);
-    dbServer = adaptorFac.getDBAdaptors(system);
-
-    //vector<string> dataSetNames;
-    //dataSetNames = thisReader->getDataSetNames(); // problem: they are not yet defined here, because they are read for each block again
-    //cout << dataSetNames.size() << endl;;
-
+    // setup schema mapper; need dataset-names in reader to filter out what
+    // we won't need
     SagSchemaMapper * thisSchemaMapper = new SagSchemaMapper(assertFac, convFac);     //registering the converter and asserter factories
     cout << "Mapping file: " << mapFile << endl;
-    thisSchemaMapper->readMappingFile(mapFile);
+    vector<string> datafileFieldNames;
+    datafileFieldNames = thisSchemaMapper->readMappingFile(mapFile);
 
     DBDataSchema::Schema * thisSchema;
     thisSchema = thisSchemaMapper->generateSchema(dbase, table);
 
-    /*cout << "complete schema: " << endl;
-    for (int j=0; j<thisSchema->getArrSchemaItems().size(); j++) {
-        cout << "col name: " << thisSchema->getArrSchemaItems().at(j)->getColumnName() << endl;
-    }
-    */
+    //now setup the file reader
+    SagReader *thisReader = new SagReader(dataFile, fileNum, datafileFieldNames);
+    dbServer = adaptorFac.getDBAdaptors(system);
     
     sagIngestor = new DBIngest::DBIngestor(thisSchema, thisReader, dbServer);
     sagIngestor->setUsrName(user);

@@ -56,7 +56,6 @@ namespace Sag {
         //std::vector<std::string> datafileFieldNames;
         //std::vector<std::string> databaseFieldNames;
 
-
         //typedef map<DataField,DataField> FieldMap;
         //FieldMap fieldMap;
 
@@ -70,11 +69,13 @@ namespace Sag {
 
         ~SagSchemaMapper();
         
-        void readMappingFile(std::string mapFile);
+        std::vector<std::string>  readMappingFile(std::string mapFile);
 
         DBType getDBType(std::string thisDBType);
 
         DBDataSchema::Schema * generateSchema(std::string dbName, std::string tblName);
+
+        //std::vector<DataField> datafileFields, databaseFields; // make it public, so I can access it from the reader as well
     };
     
 }

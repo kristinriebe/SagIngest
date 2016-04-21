@@ -63,6 +63,7 @@ namespace Sag {
             double *doubleval;
             float *floatval;
             long *longval;
+            int8_t *tinyintval;
             string type;
 
             DataBlock();
@@ -70,11 +71,8 @@ namespace Sag {
 
             void deleteData();
     };
-    // This own DataBlock-class is in principle the same as the dataset class!!
-    // The only difference may be that the DataBlock shall not contain the whole
-    // DataSet, only a part, but this is what hyperslabs are for!!
-    // Hmmm ... does DataSet contain all the data or just a handle to these data???
-
+    // This custom DataBlock-class is similar to the DataSet-class, 
+    // but if using hyperslabs, it contains only a part of the data.
     
     class SagReader : public Reader {
     private:
@@ -83,22 +81,18 @@ namespace Sag {
 
         ifstream fileStream;
 
-        H5File* fp;//holds the opened hdf5 file
+        H5File* fp; //holds the opened hdf5 file
         long ioutput; // number of current output
         long numOutputs; // total number of outputs (one for reach redshift)
         long numDataSets; // number of DataSets (= row fields, = columns) in each output
         long nvalues; // values in one dataset (assume the same number for each dataset of the same output group (redshift))
-        long blocksize;     // number of elements in one read-block, should be small enough to fit (blocksize * number of datasets) into memory
+        long blocksize; // number of elements in one read-block, should be small enough to fit (blocksize * number of datasets) into memory
 
         long snapnumfactor;
         long rowfactor;
 
-        vector<string> dataSetNames;
+        vector<string> dataSetNames; // vector containing names of the HDF5 datasets
         map<string,int> dataSetMap;
-
-        //vector<string> outputNames;
-        //map<int, OutputMeta> outputMetaMap;
-        //map<int, OutputMeta>::iterator it_outputmap;
 
         // improve performance by defining it here (instead of inside getItemInRow)
         string tmpStr;
@@ -126,18 +120,20 @@ namespace Sag {
 
     public:
         SagReader();
-        SagReader(string newFileName, int fileNum);
+        SagReader(string newFileName, int fileNum, vector<string> datafileFieldNames);
+        // DBDataSchema::Schema*&
         ~SagReader();
 
         void openFile(string newFileName);
 
         void closeFile();
 
-        void getMeta();
+        void getMeta(vector<string> datafileFieldNames);
 
         int getNextRow();
         int readNextBlock(long blocksize);
         long* readLongDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset);
+        int8_t* readTinyIntDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset);
     
         double* readDoubleDataSet(const string s, long &nvalues, hsize_t *nblock, hsize_t *offset);
         float* readFloatDataSet(const std::string s, long &nvalues, hsize_t *nblock, hsize_t *offset);

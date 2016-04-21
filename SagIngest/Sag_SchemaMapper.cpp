@@ -59,7 +59,7 @@ namespace Sag {
         type = newType;
     }
    
-    void SagSchemaMapper::readMappingFile(string mapFile) {
+    vector<string> SagSchemaMapper::readMappingFile(string mapFile) {
         // read file, store content
 
         // or get fieldnames from Sag-Reader?
@@ -80,6 +80,7 @@ namespace Sag {
         stringstream ss;
         
         DataField dataField;
+        vector<string> datafileFieldNames;
         
         //fileName = string("testdata.fieldmap");
         fileStream.open(mapFile.c_str(), ios::in);
@@ -131,11 +132,18 @@ namespace Sag {
 
         fileStream.close();
 
+        // copy names into a simple string vector for returning it
+        for (int j=0; j<datafileFields.size(); j++) {
+            datafileFieldNames.push_back(datafileFields[j].name);
+        }
+
         cout << "DataFields (file, database): " << datafileFields.size() << endl;
         for (int j=0; j<datafileFields.size(); j++) {
             cout << "  Fieldnames " << j << ":" << datafileFields[j].name << ", " << databaseFields[j].name << endl;
             cout << "  Fieldtypes " << j << ":" << datafileFields[j].type << ", " << databaseFields[j].type << endl;
         }
+
+        return datafileFieldNames;
 
     }
 
