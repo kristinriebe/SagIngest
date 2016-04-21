@@ -25,6 +25,12 @@ The format is:
 
 (see readMappingFile function in SchemaMapper.cpp)
 
+The Reader only reads dataSets that are also present in the mapping file, 
+the others are skipped.
+
+The Reader will not read all entries for a dataSet, but will read blocks of 
+a given size (take care, that it must fit into memory!).
+
 
 Installation
 --------------
