@@ -47,11 +47,6 @@ int main (int argc, const char * argv[])
     int ngrid;
     int fileNum;
     
-    // allow to use only some part of the data file, 
-    // i.e. specify offset and maximum number of rows:
-    int startRow;
-    int maxRows;
-
     int user_blocksize;
 
     string dbase;
@@ -115,11 +110,8 @@ int main (int argc, const char * argv[])
                 ("host,H", po::value<string>(&host)->default_value("localhost"), "host to use for database access (where applicable) [default: localhost]")
                 ("path,p", po::value<string>(&path)->default_value(""), "path to a database file (mainly for sqlite3, where applicable)")
                 ("mapFile,f", po::value<string>(&mapFile)->default_value(""), "path to the mapping file")
-//                ("ngrid,g", po::value<int32_t>(&ngrid)->default_value(1024), "number of cells for positional grid)")
                 ("isDryRun", po::value<bool>(&isDryRun)->default_value(0), "should this run be carried out as a dry run (no data added to database)? [default: 0]")
                 ("fileNum", po::value<int>(&fileNum)->default_value(0), "number of the data file (e.g. if multiple files per snapshot, mainly for checking purposes)")
-//                ("startRow,i", po::value<int32_t>(&startRow)->default_value(0), "start reading at this initial row number (default 0)")
-//                ("maxRows,m", po::value<int32_t>(&maxRows)->default_value(-1), "max. number of rows to be read (default -1 for all rows)")
                 ("blocksize", po::value<int32_t>(&user_blocksize)->default_value(100000), "number of rows to be read in one block (for each dataset); dataset * blocksize * dataType must fit into memory [default: 10000]")
                 ("resumeMode,R", po::value<bool>(&resumeMode)->default_value(0), "try to resume ingest on failed connection (turns off transactions)? [default: 0]")
                 ("validateSchema,v", po::value<bool>(&askUserToValidateRead)->default_value(1), "ask user to validate the schema mapping [default: 1]")
