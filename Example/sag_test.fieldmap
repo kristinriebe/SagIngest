@@ -7,11 +7,11 @@ fileNum                 INT4        fileNum         INTEGER
 phkey                   INT8        phkey           BIGINT
 
 # original SAG columns, just a few example columns
-GalaxyID                INT8        GalaxyID    BIGINT
-GalaxyHostID            INT8        HostHaloID      BIGINT
-X                       REAL4       x               FLOAT
-Y                       REAL4       y               FLOAT
-Z                       REAL4       z               FLOAT
-Halo/Halo_M200c         REAL4       HaloMass        FLOAT
-SED/MZ_stars_disk       REAL4       MZstarDisk      FLOAT
-SED_Magnitudes_Mag_ext_id120_AB_tot_r  REAL4    MagStarSDSSg   FLOAT
+/GalaxyID                INT8        GalaxyID    BIGINT
+/GalaxyHostID            INT8        HostHaloID      BIGINT
+/X                       REAL4       x               FLOAT
+/Y                       REAL4       y               FLOAT
+/Z                       REAL4       z               FLOAT
+/Halo/Halo_M200c         REAL4       HaloMass        FLOAT
+/SED/MZ_stars_disk       REAL4       MZstarDisk      FLOAT
+/SED_Magnitudes_Mag_ext_id120_AB_tot_r  REAL4    MagStarSDSSg   FLOAT

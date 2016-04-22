@@ -52,6 +52,8 @@ int main (int argc, const char * argv[])
     int startRow;
     int maxRows;
 
+    int user_blocksize;
+
     string dbase;
     string table;
     string system;
@@ -115,11 +117,10 @@ int main (int argc, const char * argv[])
                 ("mapFile,f", po::value<string>(&mapFile)->default_value(""), "path to the mapping file")
 //                ("ngrid,g", po::value<int32_t>(&ngrid)->default_value(1024), "number of cells for positional grid)")
                 ("isDryRun", po::value<bool>(&isDryRun)->default_value(0), "should this run be carried out as a dry run (no data added to database)? [default: 0]")
-//                ("dirNum", po::value<int>(&dirNum)->default_value(0), "number of the directory containing fileNum data files) [default: 0]")
                 ("fileNum", po::value<int>(&fileNum)->default_value(0), "number of the data file (e.g. if multiple files per snapshot, mainly for checking purposes)")
 //                ("startRow,i", po::value<int32_t>(&startRow)->default_value(0), "start reading at this initial row number (default 0)")
 //                ("maxRows,m", po::value<int32_t>(&maxRows)->default_value(-1), "max. number of rows to be read (default -1 for all rows)")
-//                ("output", po::value<int32_t>(&user_output)->default_value(-1), "only read data for given snaphot number? [default: -1]")
+                ("blocksize", po::value<int32_t>(&user_blocksize)->default_value(100000), "number of rows to be read in one block (for each dataset); dataset * blocksize * dataType must fit into memory [default: 10000]")
                 ("resumeMode,R", po::value<bool>(&resumeMode)->default_value(0), "try to resume ingest on failed connection (turns off transactions)? [default: 0]")
                 ("validateSchema,v", po::value<bool>(&askUserToValidateRead)->default_value(1), "ask user to validate the schema mapping [default: 1]")
                 ;
@@ -161,6 +162,7 @@ int main (int argc, const char * argv[])
     if (path != "") {
         cout << "Path: " << path << endl;
     }
+    cout << "Blocksize: " << user_blocksize << endl;
 
     cout << endl;
 
@@ -179,7 +181,7 @@ int main (int argc, const char * argv[])
     thisSchema = thisSchemaMapper->generateSchema(dbase, table);
 
     //now setup the file reader
-    SagReader *thisReader = new SagReader(dataFile, fileNum, datafileFieldNames);
+    SagReader *thisReader = new SagReader(dataFile, fileNum, user_blocksize, datafileFieldNames);
     dbServer = adaptorFac.getDBAdaptors(system);
     
     sagIngestor = new DBIngest::DBIngestor(thisSchema, thisReader, dbServer);

@@ -29,7 +29,7 @@ The Reader only reads dataSets that are also present in the mapping file,
 the others are skipped.
 
 The Reader will not read all entries for a dataSet, but will read blocks of 
-a given size (take care, that it must fit into memory!).
+a given size (so that the read blocks fit into memory!).
 
 
 Installation
@@ -43,9 +43,9 @@ The *Example* directory contains:
 
 * *create_sag_test_mysql.sql*: example create table statement  
 * *sag_test.fieldmap*: example map file for mapping data file fields to database fields  
-* *sag_test_results.hdf5*, an example data file, extracted from a SAG HDF5 output. It contains only data for output numbers 70 - 79, corresponding to snapshot numbers 116 - 125  
+* *sag_test.hdf5*, an example data file, extracted from a SAG HDF5 output. It contains only data for snapshot number 125 (redshift 0), for a subset of datasets  
 
-First a database and table must be created on your server (in the example, I use MySQL, adjust to your own needs). Then you can ingest the example data into the Sag_test table with a command line like this: 
+First a database and table must be created on your server (in the example, I use MySQL, adjust to your own needs). Then you can ingest the example data into the `Sag_test` table with a command line like this: 
 
 ```
 build/SagIngest.x  -s mysql -D TestDB -T Sag_test -U myusername -P mypassword -H 127.0.0.1 -O 3306 -f Example/sag_test.fieldmap  --fileNum=0 Example/sag_test_results.hdf5
@@ -56,11 +56,12 @@ Replace *myusername* and *mypassword* with your own credentials for your own dat
 The important new options are:   
 
 `-f`: filename for field map  
+`--blocksize`: number of rows to be read in one block (for each dataset); dataset * blocksize * dataType must fit into memory [default: 1000]  
 
 
 TODO
 -----
-* Avoid reading more than necessary by comparing the available datasets with the mapping file and already removing at this stage what will not be needed. 
+* When checking which datasets are required (mapping file), also check that already that dataTypes are matching, otherwise return with error
 * Probably do not need my own class dataBlock at all; use dataset or hyperslab or so instead?
 * Make mapping file optional, use internal names and datatypes as default
 * Read constant values as well (for phkeys)

@@ -120,7 +120,7 @@ namespace Sag {
 
     public:
         SagReader();
-        SagReader(string newFileName, int fileNum, vector<string> datafileFieldNames);
+        SagReader(string newFileName, int fileNum, int newBlocksize, vector<string> datafileFieldNames);
         // DBDataSchema::Schema*&
         ~SagReader();
 
