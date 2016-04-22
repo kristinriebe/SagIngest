@@ -48,6 +48,7 @@ file(GLOB FILES_SRC "${AIDIR}/*.h" "${AIDIR}/*.cpp")
 
 # Adjust the BOOST-path here, if needed
 #SET(BOOST_ROOT /my/nice/path/to/boost_version_something)
+#SET(CMAKE_INCLUDE_PATH ${CMAKE_INCLUDE_PATH} "/my/nice/path/to/boost_version_something")
 #SET(Boost_NO_BOOST_CMAKE TRUE)
 #message(STATUS "BOOST_ROOT: ${BOOST_ROOT}")
 
