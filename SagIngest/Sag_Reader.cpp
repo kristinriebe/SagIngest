@@ -62,6 +62,8 @@ namespace Sag {
         snapnumfactor = 1000;
         rowfactor = 10000000;
 
+        posfactor = 1.e-3;
+
         openFile(newFileName);
 
         getMeta(datafileFieldNames);
@@ -898,7 +900,15 @@ namespace Sag {
                 *(double*)(result) = b.doubleval[countInBlock];
                 return isNull;
             } else if (b.floatval) {
-                *(float*)(result) = b.floatval[countInBlock];
+                // customize for positions, since I need to multiply posfactor
+                // TODO: use an extrac column in mapping file for this or
+                // use additional functions or ... Find a cleaner solution
+                // than putting it right here.
+                if (b.name == "/X" || b.name == "/Y" || b.name == "/Z") {
+                    *(float*)(result) = b.floatval[countInBlock] * posfactor;
+                } else {
+                    *(float*)(result) = b.floatval[countInBlock];
+                }
                 return isNull;
             } else {
                 cout << "Error: No corresponding data found!" << " (" << thisItem->getDataObjName() << ")" << endl;
